@@ -1,17 +1,10 @@
 import { sql } from "@/lib/db";
 import { formatNaira, formatTime } from "@/lib/money";
 import AddSaleForm from "./AddSaleForm";
+import SalesTable, { type SaleRow } from "./SalesTable";
 import { logout } from "./actions";
 
 export const dynamic = "force-dynamic";
-
-interface SaleRow {
-  id: string | number;
-  item_name: string;
-  amount_kobo: string | number;
-  sold_at: string;
-  running_total_kobo: string | number;
-}
 
 export default async function DashboardPage() {
   let rows: SaleRow[] = [];
@@ -169,46 +162,7 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {rows.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">🛒</div>
-              <h3 className="empty-title">No sales recorded yet today</h3>
-              <p className="empty-desc">
-                Use the form on the left to log your first sale. Your transactions and running balance will appear here.
-              </p>
-            </div>
-          ) : (
-            <div className="table-wrapper">
-              <table className="sales-table" id="sales-transactions-table">
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Item</th>
-                    <th style={{ textAlign: "right" }}>Amount</th>
-                    <th style={{ textAlign: "right" }}>Running Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((sale) => (
-                    <tr key={sale.id}>
-                      <td>
-                        <span className="time-badge">
-                          {formatTime(sale.sold_at)}
-                        </span>
-                      </td>
-                      <td className="item-cell">{sale.item_name}</td>
-                      <td className="amount-cell" style={{ textAlign: "right" }}>
-                        {formatNaira(sale.amount_kobo)}
-                      </td>
-                      <td className="running-cell" style={{ textAlign: "right" }}>
-                        {formatNaira(sale.running_total_kobo)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <SalesTable rows={rows} />
         </section>
       </main>
     </div>

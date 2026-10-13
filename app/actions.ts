@@ -81,3 +81,73 @@ export async function addSale(formData: FormData) {
     }
   }
 }
+
+export async function updateSale(formData: FormData) {
+  const id = formData.get("id");
+  const name = String(formData.get("item_name") ?? "").trim();
+  const unitKobo = toKobo(String(formData.get("amount") ?? ""));
+  const rawQuantity = parseInt(String(formData.get("quantity") ?? "1"), 10);
+  const quantity = Number.isFinite(rawQuantity) && rawQuantity > 0 ? rawQuantity : 1;
+  const when = String(formData.get("sold_at") ?? "").trim();
+
+  if (!id) {
+    return { error: "Sale ID is required." };
+  }
+  if (!name) {
+    return { error: "Item name is required." };
+  }
+  if (!Number.isFinite(unitKobo) || unitKobo <= 0) {
+    return { error: "Unit amount must be greater than ₦0." };
+  }
+
+  const totalKobo = unitKobo * quantity;
+  const soldAt = when ? `${when}:00+01:00` : new Date().toISOString();
+  const displayName = quantity > 1 ? `${name} (×${quantity})` : name;
+
+  try {
+    await sql`
+      update sales
+      set item_name = ${displayName},
+          amount_kobo = ${totalKobo},
+          quantity = ${quantity},
+          sold_at = ${soldAt}
+      where id = ${id}
+    `;
+    revalidatePath("/");
+    return { success: true };
+  } catch {
+    try {
+      await sql`
+        update sales
+        set item_name = ${displayName},
+            amount_kobo = ${totalKobo},
+            sold_at = ${soldAt}
+        where id = ${id}
+      `;
+      revalidatePath("/");
+      return { success: true };
+    } catch (fallbackErr: unknown) {
+      const errorMsg =
+        fallbackErr instanceof Error ? fallbackErr.message : "Failed to update sale";
+      console.error("Error updating sale:", errorMsg);
+      return { error: errorMsg };
+    }
+  }
+}
+
+export async function deleteSale(id: number | string) {
+  if (!id) {
+    return { error: "Sale ID is required." };
+  }
+
+  try {
+    await sql`delete from sales where id = ${id}`;
+    revalidatePath("/");
+    return { success: true };
+  } catch (err: unknown) {
+    const errorMsg =
+      err instanceof Error ? err.message : "Failed to delete sale";
+    console.error("Error deleting sale:", errorMsg);
+    return { error: errorMsg };
+  }
+}

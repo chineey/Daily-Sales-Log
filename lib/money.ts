@@ -32,3 +32,19 @@ export function getLagosDatetimeLocal(): string {
   const min = pad(lagosDate.getMinutes());
   return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
 }
+
+export function formatLagosDatetimeInput(iso: string | Date): string {
+  const d = new Date(iso);
+  const lagosOffsetMs = 60 * 60 * 1000;
+  const utcMs = d.getTime() + d.getTimezoneOffset() * 60 * 1000;
+  const lagosDate = new Date(utcMs + lagosOffsetMs);
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const yyyy = lagosDate.getFullYear();
+  const mm = pad(lagosDate.getMonth() + 1);
+  const dd = pad(lagosDate.getDate());
+  const hh = pad(lagosDate.getHours());
+  const min = pad(lagosDate.getMinutes());
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+}
+
