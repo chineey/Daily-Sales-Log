@@ -35,29 +35,49 @@ export async function logout() {
 
 export async function addSale(formData: FormData) {
   const name = String(formData.get("item_name") ?? "").trim();
-  const kobo = toKobo(String(formData.get("amount") ?? ""));
+  const unitKobo = toKobo(String(formData.get("amount") ?? ""));
+  const rawQuantity = parseInt(String(formData.get("quantity") ?? "1"), 10);
+  const quantity = Number.isFinite(rawQuantity) && rawQuantity > 0 ? rawQuantity : 1;
   const when = String(formData.get("sold_at") ?? "").trim();
 
   if (!name) {
     return { error: "Item name is required." };
   }
-  if (!Number.isFinite(kobo) || kobo <= 0) {
-    return { error: "Amount must be greater than ₦0." };
+  if (!Number.isFinite(unitKobo) || unitKobo <= 0) {
+    return { error: "Unit amount must be greater than ₦0." };
   }
+
+  // Multiply unit amount by quantity to log total
+  const totalKobo = unitKobo * quantity;
 
   // Lagos is UTC+1 all year (no daylight saving), so append the offset.
   const soldAt = when ? `${when}:00+01:00` : new Date().toISOString();
 
+  // Transparent display name with multiplier if qty > 1
+  const displayName = quantity > 1 ? `${name} (×${quantity})` : name;
+
   try {
+    // Attempt insert with quantity column
     await sql`
-      insert into sales (item_name, amount_kobo, sold_at)
-      values (${name}, ${kobo}, ${soldAt})
+      insert into sales (item_name, amount_kobo, quantity, sold_at)
+      values (${displayName}, ${totalKobo}, ${quantity}, ${soldAt})
     `;
     revalidatePath("/");
     return { success: true };
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : "Failed to record sale";
-    console.error("Error inserting sale:", errorMsg);
-    return { error: errorMsg };
+  } catch {
+    // Fallback if quantity column does not exist yet on existing table
+    try {
+      await sql`
+        insert into sales (item_name, amount_kobo, sold_at)
+        values (${displayName}, ${totalKobo}, ${soldAt})
+      `;
+      revalidatePath("/");
+      return { success: true };
+    } catch (fallbackErr: unknown) {
+      const errorMsg =
+        fallbackErr instanceof Error ? fallbackErr.message : "Failed to record sale";
+      console.error("Error inserting sale:", errorMsg);
+      return { error: errorMsg };
+    }
   }
 }

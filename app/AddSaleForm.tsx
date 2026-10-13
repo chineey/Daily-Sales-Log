@@ -3,9 +3,9 @@
 import { useRef, useState, useEffect } from "react";
 import { useFormStatus } from "react-dom";
 import { addSale } from "./actions";
-import { getLagosDatetimeLocal } from "@/lib/money";
+import { getLagosDatetimeLocal, formatNaira, toKobo } from "@/lib/money";
 
-function SubmitButton() {
+function SubmitButton({ totalKobo }: { totalKobo: number }) {
   const { pending } = useFormStatus();
 
   return (
@@ -22,7 +22,9 @@ function SubmitButton() {
         </>
       ) : (
         <>
-          <span>+ Record Sale</span>
+          <span>
+            + Record Sale {totalKobo > 0 ? `(${formatNaira(totalKobo)})` : ""}
+          </span>
         </>
       )}
     </button>
@@ -44,7 +46,8 @@ export default function AddSaleForm() {
   const formRef = useRef<HTMLFormElement>(null);
   const [defaultTime, setDefaultTime] = useState("");
   const [itemName, setItemName] = useState("");
-  const [amount, setAmount] = useState("");
+  const [unitAmount, setUnitAmount] = useState("");
+  const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState(false);
 
@@ -52,6 +55,9 @@ export default function AddSaleForm() {
     // Lagos is UTC+1. Default the input to the current Lagos datetime
     setDefaultTime(getLagosDatetimeLocal());
   }, []);
+
+  const unitKobo = toKobo(unitAmount);
+  const totalKobo = unitKobo * Math.max(1, quantity);
 
   async function handleAction(formData: FormData) {
     setError(null);
@@ -63,7 +69,8 @@ export default function AddSaleForm() {
     } else {
       setSuccessNotice(true);
       setItemName("");
-      setAmount("");
+      setUnitAmount("");
+      setQuantity(1);
       // Refresh default time to now
       setDefaultTime(getLagosDatetimeLocal());
       if (formRef.current) {
@@ -79,7 +86,7 @@ export default function AddSaleForm() {
         <span>🛒</span> Log New Sale
       </h2>
       <p className="form-desc">
-        Record each transaction immediately to update today&apos;s running total.
+        Record each transaction. Quantity multiplies by unit price to log the total revenue.
       </p>
 
       {error && (
@@ -140,27 +147,89 @@ export default function AddSaleForm() {
           </div>
         </div>
 
-        <div className="form-group">
-          <label htmlFor="amount" className="form-label">
-            Amount (₦)
-          </label>
-          <div className="input-wrapper">
-            <span className="input-prefix">₦</span>
-            <input
-              id="amount"
-              name="amount"
-              type="number"
-              step="any"
-              min="1"
-              required
-              inputMode="decimal"
-              className="form-input has-prefix"
-              placeholder="0.00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
+        {/* Quantity & Unit Amount row */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "110px 1fr",
+            gap: "0.85rem",
+          }}
+        >
+          <div className="form-group">
+            <label htmlFor="quantity" className="form-label">
+              Quantity
+            </label>
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <input
+                id="quantity"
+                name="quantity"
+                type="number"
+                min="1"
+                step="1"
+                required
+                className="form-input"
+                style={{ textAlign: "center", fontWeight: 700 }}
+                value={quantity}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  setQuantity(Number.isFinite(val) && val > 0 ? val : 1);
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="amount" className="form-label">
+              Unit Price (₦)
+            </label>
+            <div className="input-wrapper">
+              <span className="input-prefix">₦</span>
+              <input
+                id="amount"
+                name="amount"
+                type="number"
+                step="any"
+                min="1"
+                required
+                inputMode="decimal"
+                className="form-input has-prefix"
+                placeholder="0.00"
+                value={unitAmount}
+                onChange={(e) => setUnitAmount(e.target.value)}
+              />
+            </div>
           </div>
         </div>
+
+        {/* Live Calculation Badge when quantity > 1 or amount entered */}
+        {unitKobo > 0 && (
+          <div
+            style={{
+              background: "rgba(16, 185, 129, 0.08)",
+              border: "1px dashed rgba(16, 185, 129, 0.35)",
+              borderRadius: "var(--radius-md)",
+              padding: "0.6rem 0.85rem",
+              marginBottom: "1.1rem",
+              fontSize: "0.825rem",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <span style={{ color: "var(--text-muted)" }}>
+              {quantity} × {formatNaira(unitKobo)} =
+            </span>
+            <strong
+              style={{
+                color: "var(--accent-emerald)",
+                fontSize: "1.05rem",
+                fontFamily: "var(--font-heading)",
+              }}
+            >
+              Total: {formatNaira(totalKobo)}
+            </strong>
+          </div>
+        )}
 
         <div className="form-group">
           <label htmlFor="sold_at" className="form-label">
@@ -177,7 +246,7 @@ export default function AddSaleForm() {
           />
         </div>
 
-        <SubmitButton />
+        <SubmitButton totalKobo={totalKobo} />
       </form>
     </div>
   );
