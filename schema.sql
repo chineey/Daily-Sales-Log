@@ -1,10 +1,9 @@
--- Schema for Daily Sales Log
-create table sales (
-  id          bigserial primary key,
-  item_name   text   not null check (length(trim(item_name)) > 0),
-  amount_kobo bigint not null check (amount_kobo > 0),
-  sold_at     timestamptz not null default now(),
-  created_at  timestamptz not null default now()
+CREATE TABLE IF NOT EXISTS sales (
+  id BIGSERIAL PRIMARY KEY,
+  item_name TEXT NOT NULL CHECK (length(trim(item_name)) > 0),
+  amount_kobo BIGINT NOT NULL CHECK (amount_kobo > 0),
+  sold_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-create index sales_sold_at_idx on sales (sold_at);
+CREATE INDEX IF NOT EXISTS sales_sold_at_idx ON sales (sold_at);
