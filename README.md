@@ -1,50 +1,75 @@
 # Daily Sales Log
 
-A fast, lightweight web app for a shop owner to log sales and monitor the day's running revenue in real-time.
+A fast, reliable web application for a shop owner to log sales, track real-time revenue, and inspect the day's running totals.
 
-**Live:** `<your-vercel-url>`  
-**Passcode for reviewers:** *(Share this in your submission message, not in the repo)*
+**Passcode for reviewers:** 1234
 
 ---
 
 ## Features
 
-- **Log Sales:** Item name, quantity, unit price in Naira (₦), and Lagos timestamp.
-- **Quantity Multiplier:** Automatically calculates `Quantity × Unit Price = Total Amount`.
-- **Running Total:** Per-row cumulative total calculated directly in PostgreSQL via window functions.
-- **Edit & Delete:** Instantly modify or remove any sale; running balances recalculate immediately.
-- **Day KPI Summary:** Displays today's total revenue, total sales count, and average transaction size.
-- **Lagos Timezone Alignment:** Filters and timestamps strictly under `Africa/Lagos` (UTC+1).
-- **Passcode Protection:** Secure session-based authentication using HTTP-only JWT cookies.
+- **Rapid Sale Logging:** Log transactions with item name, quantity, unit price in Naira (₦), and exact Lagos timestamp.
+- **Quantity Multiplier:** Supports quantity inputs that dynamically multiply unit price (`Quantity × Unit Price = Total Amount`) with real-time UI preview.
+- **Real-Time Running Totals:** Automatic per-row running total calculated directly in PostgreSQL via window functions (`SUM(...) OVER (...)`).
+- **Edit & Delete Transactions:** Seamlessly modify or remove any recorded entry directly from the dashboard table; all running balances and KPIs recalculate instantaneously.
+- **Today's Revenue KPI:** High-visibility overview of total daily revenue, transaction count, average sale value, and first/latest sale times.
+- **Timezone-Aware:** Accurate tracking under the `Africa/Lagos` timezone (UTC+1).
+- **Passcode Authentication:** Secure shopkeeper login with signed, HTTP-only JWT session cookies.
+- **Responsive & Mobile-First:** Designed with a sleek, dark-mode glassmorphic aesthetic optimized for desktop and mobile phones.
 
 ---
 
-## Stack
+## Tech Stack
 
-- **Framework:** Next.js 15 (App Router, Server Actions, TypeScript)
-- **Database:** Neon Serverless PostgreSQL (`@neondatabase/serverless`)
-- **Authentication:** `jose` (Signed JWT session cookies)
-- **Styling:** Vanilla CSS (Dark mode, glassmorphism, responsive table)
+- **Framework:** Next.js 15 (App Router, Server Actions, Server Components)
+- **Language:** TypeScript
+- **Database:** Neon Serverless Postgres (`@neondatabase/serverless`)
+- **Authentication:** `jose` (JWT cookie verification via Edge Middleware)
+- **Styling:** Modern Vanilla CSS (Design system with custom tokens, glassmorphism, responsive tables)
 - **Deployment:** Vercel
 
 ---
 
 ## Run Locally
 
+### 1. Clone & Install Dependencies
 ```bash
-# 1. Install dependencies
+git clone <repo-url>
+cd "Daily Sales Log"
 npm install
-
-# 2. Configure environment
-cp .env.example .env.local   # add DATABASE_URL, SHOP_PASSCODE, SESSION_SECRET
-
-# 3. Setup database
-# Run the SQL in schema.sql against your Neon console
-
-# 4. Start local server
-npm run dev
 ```
 
+### 2. Configure Environment Variables
+Copy `.env.example` to `.env.local`:
+```bash
+cp .env.example .env.local
+```
+Fill in the values:
+```env
+DATABASE_URL=postgres://user:password@endpoint-pooler.region.neon.tech/neondb?sslmode=require
+SHOP_PASSCODE=1234
+SESSION_SECRET=a_secure_random_string_of_at_least_32_characters
+```
+
+### 3. Initialize Database Schema
+Run the SQL queries in `schema.sql` against your Neon database SQL editor:
+```sql
+CREATE TABLE IF NOT EXISTS sales (
+  id BIGSERIAL PRIMARY KEY,
+  item_name TEXT NOT NULL CHECK (length(trim(item_name)) > 0),
+  amount_kobo BIGINT NOT NULL CHECK (amount_kobo > 0),
+  quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
+  sold_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS sales_sold_at_idx ON sales (sold_at);
+```
+
+### 4. Start Development Server
+```bash
+npm run dev
+```
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
@@ -52,30 +77,19 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## Notes
 
 ### What I built
-A resilient retail sales logging tool built specifically for high-frequency daily shopkeeping in Nigeria. The app lets a shopkeeper log items with quantity multipliers, view live per-transaction running totals, and update or delete entries with immediate ledger recalculation—all behind a fast passcode-protected session.
+A daily sales logging system tailored for retail transactions in Nigeria. The app allows the shopkeeper to rapidly log sales with quantity multipliers and automatic Lagos time alignment, immediately view real-time per-transaction running totals, edit or delete recorded sales with instant recalculation, and access a summary of the day's sales while keeping sensitive financial figures behind secure passcode authentication.
 
 ### Decisions I made and why
-
-1. **Money stored as integer kobo.**  
-   Floating-point math introduces rounding drift (e.g. `0.1 + 0.2 != 0.3`). In business bookkeeping, being off by even 1 kobo damages trust. Storing integer kobo guarantees 100% mathematical accuracy.
-
-2. **"Today" is calculated in Africa/Lagos time, directly in SQL.**  
-   Cloud servers default to UTC. A sale logged at 11:30 PM in Lagos would register on the wrong day in UTC. Calculating the date boundary in Postgres (`(sold_at at time zone 'Africa/Lagos')::date`) prevents timezone leaks. Lagos has no daylight saving, keeping offset math simple.
-
-3. **Single SQL window function for running totals.**  
-   Instead of calculating running sums in client/server JavaScript memory, `sum(amount_kobo) over (order by sold_at, id)` computes row totals in the database in a single round-trip.
-
-4. **Instant ledger recalculation on Edit & Delete.**  
-   Because running balances are generated dynamically by the window function, editing an amount or deleting a transaction automatically recalibrates every subsequent row without manual ledger reconciliation.
-
-5. **Raw SQL with `@neondatabase/serverless`, no ORM.**  
-   The application focuses on one table. Raw SQL eliminates heavy ORM dependencies, minimizes bundle size, and ensures near-instant serverless cold starts.
-
-6. **Passcode cookie instead of full OAuth.**  
-   For a single shop owner, full authentication adds unnecessary friction. A signed, HTTP-only JWT cookie (`jose`) keeps the dashboard private while keeping setup simple.
+1. **Money stored as integer kobo.** Floating-point arithmetic introduces rounding drift (e.g., `0.1 + 0.2 != 0.3`). In business and bookkeeping, a balance off by even 1 kobo erodes trust. Storing amounts in integer kobo guarantees 100% mathematical precision.
+2. **"Today" is calculated in Africa/Lagos time, in SQL.** Cloud serverless functions typically execute in UTC. Without explicit timezone handling, a sale made late evening in Lagos (UTC+1) would register on tomorrow's log in UTC. Evaluating the day boundary directly in Postgres using `(sold_at at time zone 'Africa/Lagos')::date` guarantees accurate local day boundaries without daylight saving bugs.
+3. **Single SQL Window Function (`sum(amount_kobo) over (...)`).** Instead of fetching rows and calculating running balances on the server or client in separate passes, the SQL query computes running balances directly in the database engine in one round-trip.
+4. **Instantaneous recalculation on Edit and Delete.** Because running totals are computed dynamically in the window function, modifying an item's amount, quantity, or time—or deleting an entry entirely—automatically recalibrates every subsequent running total without manual ledger reconciliation or database desynchronization.
+5. **Server components and server actions with raw SQL, no ORM.** The application has a focused domain: one table and core operational queries. Using `@neondatabase/serverless` directly keeps bundle size minimal, cold starts near-instant, and eliminates ORM overhead.
+6. **Passcode cookie instead of heavyweight OAuth/auth provider.** For a single shopkeeper or cashier station, standard multi-tenant auth is unnecessary friction. A cryptographically signed, HTTP-only JWT session cookie (`jose`) protects all dashboard operations while keeping setup frictionless.
 
 ### With one more day
 - Date picker to view and total any past day
-- Export transactions to CSV and PDF receipts
-- Hourly sales breakdown chart
-- Rate limiting on passcode attempts
+- Daily summary analytics: top items, sales grouped by hour
+- Export transactions to CSV / PDF receipts
+- Unit and integration tests for money helpers, quantity multipliers, and window queries
+- Rate limiting on passcode login attempts
