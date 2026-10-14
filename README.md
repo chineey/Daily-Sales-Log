@@ -80,12 +80,24 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 A daily sales logging system tailored for retail transactions in Nigeria. The app allows the shopkeeper to rapidly log sales with quantity multipliers and automatic Lagos time alignment, immediately view real-time per-transaction running totals, edit or delete recorded sales with instant recalculation, and access a summary of the day's sales while keeping sensitive financial figures behind secure passcode authentication.
 
 ### Decisions I made and why
-1. **Money stored as integer kobo.** Floating-point arithmetic introduces rounding drift (e.g., `0.1 + 0.2 != 0.3`). In business and bookkeeping, a balance off by even 1 kobo erodes trust. Storing amounts in integer kobo guarantees 100% mathematical precision.
-2. **"Today" is calculated in Africa/Lagos time, in SQL.** Cloud serverless functions typically execute in UTC. Without explicit timezone handling, a sale made late evening in Lagos (UTC+1) would register on tomorrow's log in UTC. Evaluating the day boundary directly in Postgres using `(sold_at at time zone 'Africa/Lagos')::date` guarantees accurate local day boundaries without daylight saving bugs.
-3. **Single SQL Window Function (`sum(amount_kobo) over (...)`).** Instead of fetching rows and calculating running balances on the server or client in separate passes, the SQL query computes running balances directly in the database engine in one round-trip.
-4. **Instantaneous recalculation on Edit and Delete.** Because running totals are computed dynamically in the window function, modifying an item's amount, quantity, or time—or deleting an entry entirely—automatically recalibrates every subsequent running total without manual ledger reconciliation or database desynchronization.
-5. **Server components and server actions with raw SQL, no ORM.** The application has a focused domain: one table and core operational queries. Using `@neondatabase/serverless` directly keeps bundle size minimal, cold starts near-instant, and eliminates ORM overhead.
-6. **Passcode cookie instead of heavyweight OAuth/auth provider.** For a single shopkeeper or cashier station, standard multi-tenant auth is unnecessary friction. A cryptographically signed, HTTP-only JWT session cookie (`jose`) protects all dashboard operations while keeping setup frictionless.
+
+1. **I store money as whole kobo, not decimals.**
+   Computers can get small decimal sums slightly wrong (0.1 + 0.2 comes out as 0.30000000000000004). In a sales log, even a 1 kobo mistake makes the owner stop trusting the numbers. Counting in whole kobo means every total is exact.
+
+2. **"Today" follows Lagos time.**
+   The server runs on UTC time, which is one hour behind Lagos. Without a fix, a sale made at 11:30pm in Lagos would show up under tomorrow. The database works out the day using Lagos time, so each sale lands on the right day.
+
+3. **The running total is worked out by the database.**
+   Instead of adding up rows in the app, I ask the database for each row's running total in one query. It is faster, and the app has less code that can go wrong.
+
+4. **Edits and deletes fix the totals automatically.**
+   Running totals are calculated fresh each time the page loads, not saved. If the shop owner corrects an amount or removes a sale, every total after it updates by itself. There is no stored balance that can drift out of sync.
+
+5. **Simple tools, no extra layers.**
+   The app has one table and a few queries, so I wrote the queries directly instead of adding a database framework. That means less code to maintain and a faster app.
+
+6. **A passcode instead of full user accounts.**
+   This is meant for one shop owner or one till. Asking them to create accounts and verify emails would be friction for no benefit. A passcode keeps strangers out, and the login is stored securely in the browser.
 
 ### With one more day
 - Date picker to view and total any past day
